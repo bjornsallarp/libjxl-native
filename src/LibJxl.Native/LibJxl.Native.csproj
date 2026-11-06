@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Packaging only: packs artifacts/native/<rid>/ into runtimes/<rid>/native/.
+       There is no managed code, so the package installs into any target framework. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))</RepoRoot>
+    <NativeDir>$(RepoRoot)artifacts/native/</NativeDir>
+    <!-- The package version follows LIBJXL_TAG in versions.env; a repack of the same
+         libjxl overrides it with -p:PackageVersion=0.12.0.1. -->
+    <LibjxlVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(RepoRoot)versions.env')), '(?&lt;=LIBJXL_TAG=v)[0-9.]+').Value)</LibjxlVersion>
+    <Version>$(LibjxlVersion)</Version>
+
+    <PackageId>LibJxl.Native</PackageId>
+    <Authors>Björn Sållarp</Authors>
+    <Description>Native libjxl $(LibjxlVersion) (JPEG XL reference library) for P/Invoke: one self-contained library per runtime, exporting libjxl's full C API (encoder, decoder, CMS and thread runners). No managed code. Runtimes: linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64, osx-x64, osx-arm64, win-x64, win-arm64.</Description>
+    <PackageTags>jpegxl jxl libjxl jpeg-xl native pinvoke</PackageTags>
+    <PackageLicenseExpression>BSD-3-Clause AND MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/bjornsallarp/libjxl-native</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/bjornsallarp/libjxl-native.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(NativeDir)**/libjxl_native.so;$(NativeDir)**/libjxl_native.dylib;$(NativeDir)**/jxl_native.dll"
+          Pack="true" PackagePath="runtimes/%(RecursiveDir)native/%(Filename)%(Extension)" />
+    <None Include="$(RepoRoot)README.md;$(RepoRoot)THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

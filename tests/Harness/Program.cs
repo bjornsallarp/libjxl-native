@@ -12,8 +12,13 @@ if (!string.IsNullOrEmpty(nativePath))
 }
 
 Console.WriteLine($"runtime: {RuntimeInformation.RuntimeIdentifier} ({RuntimeInformation.OSDescription}, {RuntimeInformation.ProcessArchitecture})");
-Console.WriteLine($"library: {nativePath ?? "(package)"}");
 var v = Jxl.JxlEncoderVersion();
+// On Linux, show which file the runtime actually loaded, e.g. musl vs glibc from the package.
+var loaded = nativePath;
+if (string.IsNullOrEmpty(loaded) && OperatingSystem.IsLinux())
+    loaded = File.ReadLines("/proc/self/maps").Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        .Select(p => p[^1]).FirstOrDefault(p => p.EndsWith("libjxl_native.so"));
+Console.WriteLine($"library: {loaded ?? "(package)"}");
 Console.WriteLine($"libjxl: {v / 1000000}.{v / 1000 % 1000}.{v % 1000}");
 
 // --dump <dir> writes each encoded .jxl and its source pixels (.raw), for

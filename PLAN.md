@@ -50,10 +50,11 @@ Everything is built locally on an Apple silicon Mac: Linux and Windows in Docker
 
 ## Packaging
 
-- A packaging-only SDK-style project (`IncludeBuildOutput=false`, `SuppressDependenciesWhenPacking=true`, `NoWarn=NU5128`), packed with `dotnet pack`. Native files go in via `<None Include="..." Pack="true" PackagePath="runtimes/<rid>/native/" />`. The resulting package has no `lib/` folder and installs into any target framework.
-- Because the package ships both `linux-x64` and `linux-musl-x64`, Alpine gets the musl file. Confirm the RID fallback picks it, not the glibc one.
-- Include `THIRD-PARTY-NOTICES.md` with the licences: libjxl BSD-3-Clause, brotli MIT, highway Apache-2.0 / BSD-3-Clause, skcms BSD-3-Clause.
-- Package metadata: id `LibJxl.Native`, license expression `BSD-3-Clause AND MIT`, description naming the libjxl version and RIDs, `README.md` as the package readme, and tags such as `jpegxl jxl native`.
+- `src/LibJxl.Native/LibJxl.Native.csproj` is a packaging-only SDK-style project (`IncludeBuildOutput=false`, `SuppressDependenciesWhenPacking=true`, `NoWarn=NU5128`), packed with `dotnet pack`. It packs every `artifacts/native/<rid>/` library present to `runtimes/<rid>/native/<file>`. The package has no `lib/` folder and no dependencies, and installs into any target framework.
+- The version is read from `LIBJXL_TAG` in `versions.env`; a repack overrides it with `-p:PackageVersion=0.12.0.1`.
+- Alpine gets the musl file: the package smoke test confirms .NET loads `runtimes/linux-musl-<arch>/native/` there, not the glibc one.
+- `THIRD-PARTY-NOTICES.md` (repo root, also packed) has the full licence texts: libjxl BSD-3-Clause plus its patent grant, Brotli MIT, Highway under BSD-3-Clause (it is dual-licensed), skcms BSD-3-Clause, and for the Windows DLLs the LLVM runtime (Apache-2.0 WITH LLVM-exception), MinGW-w64 runtime and winpthreads.
+- Package metadata: id `LibJxl.Native`, license expression `BSD-3-Clause AND MIT`, description naming the libjxl version and RIDs, `README.md` as the package readme, tags, project and repository URLs (`dotnet pack` records the commit).
 
 ## Tests
 
@@ -62,14 +63,14 @@ Everything is built locally on an Apple silicon Mac: Linux and Windows in Docker
 - Loads the freshly built library.
 - Encodes and decodes four 2048×2048 test images and asserts the round trip is bit-exact: photo-like RGB (gradients with photographic noise, flat blocks, hard-edged checkerboards), pure noise, flat palette art, and photo-like RGBA with opaque, transparent and graded alpha. They are generated deterministically in `tests/Harness/TestImages.cs` rather than committed: raw files would be 12–16 MB each, and PNGs would need an image library.
 - Reports the median of 10 effort-1 encodes of the photo-like image, for the performance criterion.
-- Checks the library's dependencies against the allowed list.
+The dependency check runs in `build-native.sh`; loading the library in a clean runtime image proves those dependencies resolve.
 
 Where each RID runs:
 
 | RID | Test host |
 |---|---|
-| `linux-x64`, `linux-arm64` | `mcr.microsoft.com/dotnet/sdk:10.0` in Docker (x64 emulated) |
-| `linux-musl-x64`, `linux-musl-arm64` | `mcr.microsoft.com/dotnet/sdk:10.0-alpine` in Docker (x64 emulated) |
+| `linux-x64`, `linux-arm64` | `mcr.microsoft.com/dotnet/runtime:10.0` (Ubuntu 24.04) in Docker (x64 emulated) |
+| `linux-musl-x64`, `linux-musl-arm64` | `mcr.microsoft.com/dotnet/runtime:10.0-alpine` in Docker (x64 emulated) |
 | `osx-arm64` | Mac host |
 | `osx-x64` | Mac host under Rosetta, with an x64 .NET runtime |
 | `win-x64` | GitHub `windows-2025` runner |
@@ -85,7 +86,7 @@ Where each RID runs:
 
 1. On `ubuntu-24.04`, run `build.sh win-x64 win-arm64` in Docker and upload both DLLs as one artifact.
 2. On `windows-2025` and `windows-11-arm`, download that artifact and run the harness (`test.ps1`), then upload each DLL that passed, with its `build-info.txt` and `test-result.txt`, as `windows-tested-<rid>`.
-3. *(Once packaging exists.)* On the same runners, pack a Windows-only `.nupkg` and smoke-test it from a local folder source, proving `runtimes/win-*/native/` resolves.
+3. On the same runners, `test.ps1` then packs a Windows-only `.nupkg` and smoke-tests it: a copy of the harness restores it from a local folder and runs encode → decode, proving `runtimes/win-*/native/` resolves. The DLL is uploaded only if both steps pass.
 
 Locally, `./fetch-windows.sh [run-id]` downloads the `windows-tested-*` artifacts into `artifacts/native/win-*/`, replacing any local Windows build, so the files packed are exactly the ones tested on Windows. Actions are pinned by commit SHA.
 
@@ -93,8 +94,8 @@ The repo must be on GitHub. On a private repo, Windows minutes count double agai
 
 ## Release (local)
 
-- `pack.sh` takes `artifacts/native/<rid>/`, refuses to pack if any RID lacks a passing test result (for Windows, a successful workflow run for the current commit), and runs `dotnet pack`.
-- It then smoke-tests the `.nupkg` by restoring it from a local folder source into the harness on linux-x64 (glibc) and Alpine in Docker, and on macOS, and running encode → decode there. This proves the runtime resolves the right `runtimes/<rid>/native/` file, which is what the consumer depends on. Windows resolution is covered by the workflow's Windows-only package.
+- `pack.sh` takes every `artifacts/native/<rid>/`, refuses to pack if any lacks a passing `test-result.txt` or a required RID is missing, and runs `dotnet pack` into `artifacts/package/`. A rebuild clears the test result; Windows results come from `fetch-windows.sh`. It doesn't require the Windows run to be for the current commit, since unrelated commits (docs, scripts) don't change the DLL; the result records the run's commit.
+- It then smoke-tests the `.nupkg`: a fresh copy of the harness restores it from the local folder (own package cache, no other sources), builds once on the Mac (portable), and runs encode → decode on all four Linux RIDs in the runtime images and on both macOS RIDs, without `JXL_NATIVE_PATH`. On Linux the harness prints the loaded file, and `pack.sh` checks it is `runtimes/<rid>/native/`. Windows is covered by the workflow.
 - Publishing is a manual `dotnet nuget push` to the private feed, documented in the README. Tag the commit `v<version>`.
 
 ## Harness settings
@@ -114,13 +115,13 @@ The harness, and the performance criterion below, use:
 
 ## Acceptance criteria
 
-- [ ] The `.nupkg` contains a native library for at least the four required RIDs, each self-contained per the dependency check.
-- [ ] The `.nupkg` contains no managed assembly.
-- [ ] On every packed RID, on that RID's test host, the harness's encode then decode of the test images is bit-exact. libjxl's `djxl` (any version) decodes the output to the same pixels; check that once by hand.
-- [ ] All native libraries are built in Docker, except macOS, which is built on the Mac host. Windows tests need nothing on the Mac beyond `gh`.
-- [ ] Lossless effort-1 encode of a 2048×2048 RGB image takes ≤ 20 ms single-threaded on an M-series Mac, close to `cjxl -d 0 -e 1 --num_threads=0`. This confirms an optimised build (release flags, highway SIMD dispatch) rather than serving any one use case.
-- [ ] A fresh `dotnet new console` with only this `.nupkg` in a local folder source restores, builds and runs encode → decode on macOS, Windows, glibc Linux and Alpine, with nothing installed on the machine.
-- [ ] `README.md` covers the consumer documentation above, and the Mac prerequisites, and how to build, test (including running the Windows workflow), pack, publish to the feed and bump libjxl.
+- [x] The `.nupkg` contains a native library for at least the four required RIDs, each self-contained per the dependency check. (All eight.)
+- [x] The `.nupkg` contains no managed assembly.
+- [x] On every packed RID, on that RID's test host, the harness's encode then decode of the test images is bit-exact. libjxl's `djxl` (any version) decodes the output to the same pixels; check that once by hand.
+- [x] All native libraries are built in Docker, except macOS, which is built on the Mac host. Windows tests need nothing on the Mac beyond `gh`.
+- [x] Lossless effort-1 encode of a 2048×2048 RGB image takes ≤ 20 ms single-threaded on an M-series Mac, close to `cjxl -d 0 -e 1 --num_threads=0`. This confirms an optimised build (release flags, highway SIMD dispatch) rather than serving any one use case. (Median 10.8 ms; `cjxl` v0.12.0 takes 13.1 ms on the same image, output within 2 bytes.)
+- [ ] A fresh `dotnet new console` with only this `.nupkg` in a local folder source restores, builds and runs encode → decode on macOS, Windows, glibc Linux and Alpine, with nothing installed on the machine. (A copy of the harness stands in for the console app. Done for macOS and Linux via `pack.sh`; Windows pending the workflow's package smoke test.)
+- [x] `README.md` covers the consumer documentation above, and the Mac prerequisites, and how to build, test (including running the Windows workflow), pack, publish to the feed and bump libjxl.
 
 ## Out of scope
 
