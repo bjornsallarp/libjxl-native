@@ -19,7 +19,7 @@
     <Version>$(LibjxlVersion)</Version>
     <Version Condition="'$(PackageVersionOverride)' != ''">$(PackageVersionOverride)</Version>
 
-    <PackageId>LibJxl.Native</PackageId>
+    <PackageId>MightyLittleJxl.Native</PackageId>
     <Authors>Björn Sållarp</Authors>
     <Description>Native libjxl $(LibjxlVersion) (JPEG XL reference library) for P/Invoke: one self-contained library per runtime, exporting libjxl's full C API (encoder, decoder, CMS and thread runners). No managed code. Runtimes: linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64, osx-x64, osx-arm64, win-x64, win-arm64.</Description>
     <PackageTags>jpegxl jxl libjxl jpeg-xl native pinvoke</PackageTags>

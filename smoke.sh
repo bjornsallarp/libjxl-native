@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke-tests artifacts/package/LibJxl.Native.*.nupkg the way a consumer uses it:
+# Smoke-tests artifacts/package/MightyLittleJxl.Native.*.nupkg the way a consumer uses it:
 # a fresh copy of the harness restores the package from that folder only, and runs
 # encode/decode with .NET resolving runtimes/<rid>/native/ itself.
 # Linux RIDs run in Docker, macOS RIDs on this Mac; Windows: smoke.ps1.
@@ -13,15 +13,15 @@ source scripts/run-harness.sh
 all_rids=(linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-arm64 osx-x64)
 if [[ $# -eq 0 || $1 == all ]]; then rids=("${all_rids[@]}"); else rids=("$@"); fi
 
-nupkg=$(ls artifacts/package/LibJxl.Native.*.nupkg)
-version=$(basename "$nupkg" .nupkg); version=${version#LibJxl.Native.}
+nupkg=$(ls artifacts/package/MightyLittleJxl.Native.*.nupkg)
+version=$(basename "$nupkg" .nupkg); version=${version#MightyLittleJxl.Native.}
 
 smoke=build/smoke
 rm -rf "$smoke"
 mkdir -p "$smoke/src"
 cp tests/Harness/*.cs tests/Harness/Harness.csproj "$smoke/src/"
 dotnet build "$smoke/src" -c Release -o "$smoke/app" --nologo -v quiet \
-  -p:LibJxlNativeVersion="$version" -p:RestoreSources="$root/artifacts/package" \
+  -p:NativePackageVersion="$version" -p:RestoreSources="$root/artifacts/package" \
   -p:RestorePackagesPath="$root/$smoke/packages" >/dev/null
 
 failed=()

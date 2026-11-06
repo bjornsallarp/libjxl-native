@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Builds libjxl (the JPEG XL reference library) for every common .NET platform and ships the native binaries, with no managed code, as one NuGet package: `LibJxl.Native`. The consumer writes its own P/Invoke binding.
+Builds libjxl (the JPEG XL reference library) for every common .NET platform and ships the native binaries, with no managed code, as one NuGet package: `MightyLittleJxl.Native`. The consumer writes its own P/Invoke binding.
 
 Read `PLAN.md` first: it holds the goal, the constraints and the acceptance criteria. Keep it current as decisions are made.
 

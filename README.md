@@ -1,11 +1,11 @@
-# LibJxl.Native
+# MightyLittleJxl.Native
 
 Native builds of [libjxl](https://github.com/libjxl/libjxl) 0.12.0, the JPEG XL reference library, packaged for .NET P/Invoke. Each runtime gets one self-contained library that exports libjxl's full C API. The package has no managed code: you write the binding you need.
 
 ## Using the package
 
 ```sh
-dotnet add package LibJxl.Native --version 0.12.0
+dotnet add package MightyLittleJxl.Native --version 0.12.0
 ```
 
 The package has no other dependencies and works with any target framework. .NET picks the right file for the platform from `runtimes/<rid>/native/`, with musl preferred over glibc on Alpine.
@@ -53,7 +53,7 @@ Everything runs on GitHub Actions; [`PLAN.md`](https://github.com/bjornsallarp/l
 2. **Cross-check** every encoded file with libjxl's own `djxl`, which must decode it to exactly the source pixels.
 3. **Pack** the eight tested libraries into the `.nupkg`.
 4. **Smoke-test the package** on all eight runtimes: a fresh project restores it from a local folder and encodes and decodes, with .NET picking the library from `runtimes/<rid>/native/`.
-5. **Release**, on `main` only: if this package version isn't released yet, push it to the NuGet feed and create a GitHub release with the `.nupkg` attached.
+5. **Release**, on `main` only: if this package version isn't released yet, push it to nuget.org and create a GitHub release with the `.nupkg` attached.
 
 [`update.yml`](https://github.com/bjornsallarp/libjxl-native/blob/main/.github/workflows/update.yml) checks weekly for a new libjxl release. When there is one, it opens a pull request that bumps `versions.env` and runs CI on it. Merging the pull request releases the new version.
 
@@ -61,7 +61,8 @@ To repack the same libjxl, for example after a build fix, add `PACKAGE_VERSION=<
 
 ### Setup
 
-- Repository secrets `NUGET_SOURCE` (the feed's push URL) and `NUGET_API_KEY`. Without them, releases are created on GitHub only.
+- nuget.org [Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) policy for `MightyLittleJxl.*`: repository `bjornsallarp/libjxl-native`, workflow `ci.yml`, environment `nuget`. No API key is stored; each release run gets a short-lived one.
+- GitHub environment `nuget`, deployable from `main` only.
 - Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests", so `update.yml` can open its pull request.
 
 ### Running locally
@@ -73,5 +74,5 @@ The same scripts run on an Apple silicon Mac, for debugging. Prerequisites: Dock
 | Build | `./build.sh [<rid>...]`, all eight by default (Windows cross-compiles in Docker) → `artifacts/native/<rid>/` |
 | Test | `./test.sh [<rid>...]`, Linux in Docker and macOS on the Mac. Windows only runs in CI (`test.ps1`). |
 | Cross-check | `scripts/djxl-check.sh build/dump` |
-| Pack | `./pack.sh` → `artifacts/package/LibJxl.Native.<version>.nupkg` (needs a passing test for every runtime present) |
+| Pack | `./pack.sh` → `artifacts/package/MightyLittleJxl.Native.<version>.nupkg` (needs a passing test for every runtime present) |
 | Smoke-test | `./smoke.sh [<rid>...]` |

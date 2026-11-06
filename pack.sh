@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Packs artifacts/native/<rid>/ into artifacts/package/LibJxl.Native.<version>.nupkg.
+# Packs artifacts/native/<rid>/ into artifacts/package/MightyLittleJxl.Native.<version>.nupkg.
 # Every RID present must have a passing test result; smoke-test the package with
 # smoke.sh / smoke.ps1 afterwards.
 # Usage: ./pack.sh [extra dotnet pack arguments]
@@ -24,5 +24,5 @@ done
 echo "packing: ${rids[*]}"
 
 rm -rf artifacts/package
-dotnet pack src/LibJxl.Native -o artifacts/package --nologo -v quiet "$@"
-ls artifacts/package/LibJxl.Native.*.nupkg
+dotnet pack src/MightyLittleJxl.Native -o artifacts/package --nologo -v quiet "$@"
+ls artifacts/package/MightyLittleJxl.Native.*.nupkg

@@ -45,7 +45,7 @@ jobs:
           gh pr create --base main --head "$branch" --title "Bump libjxl to $latest" --body "$(cat <<EOF
           libjxl [$latest](https://github.com/libjxl/libjxl/releases/tag/$latest) is out (pinned: $LIBJXL_TAG).
 
-          This bumps \`LIBJXL_TAG\` and \`LIBJXL_COMMIT\` in \`versions.env\` and the version in \`README.md\`. ci runs on this branch: every RID is built, tested, cross-checked with djxl and smoke-tested as a package. Merging releases \`LibJxl.Native $new\`.
+          This bumps \`LIBJXL_TAG\` and \`LIBJXL_COMMIT\` in \`versions.env\` and the version in \`README.md\`. ci runs on this branch: every RID is built, tested, cross-checked with djxl and smoke-tested as a package. Merging releases \`MightyLittleJxl.Native $new\`.
 
           Before merging, check the [changelog](https://github.com/libjxl/libjxl/blob/$latest/CHANGELOG.md) for C API changes consumers' bindings need, and the export count in the README.
           EOF

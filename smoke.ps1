@@ -1,4 +1,4 @@
-# Smoke-tests artifacts/package/LibJxl.Native.*.nupkg on Windows, the way a consumer
+# Smoke-tests artifacts/package/MightyLittleJxl.Native.*.nupkg on Windows, the way a consumer
 # uses it: a fresh copy of the harness restores the package from that folder only,
 # and .NET resolves runtimes/<rid>/native/ itself. Counterpart of smoke.sh.
 # Usage: ./smoke.ps1 -Rid win-x64
@@ -10,14 +10,14 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
-$nupkg = Get-Item artifacts/package/LibJxl.Native.*.nupkg
-$version = $nupkg.BaseName -replace '^LibJxl\.Native\.', ''
+$nupkg = Get-Item artifacts/package/MightyLittleJxl.Native.*.nupkg
+$version = $nupkg.BaseName -replace '^MightyLittleJxl\.Native\.', ''
 
 Remove-Item build/smoke -Recurse -ErrorAction SilentlyContinue
 New-Item build/smoke/src -ItemType Directory -Force | Out-Null
 Copy-Item tests/Harness/*.cs, tests/Harness/Harness.csproj build/smoke/src/
 dotnet build build/smoke/src -c Release -o build/smoke/app --nologo -v quiet `
-    "-p:LibJxlNativeVersion=$version" "-p:RestoreSources=$($nupkg.DirectoryName)" `
+    "-p:NativePackageVersion=$version" "-p:RestoreSources=$($nupkg.DirectoryName)" `
     "-p:RestorePackagesPath=$PWD/build/smoke/packages" | Out-Null
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 

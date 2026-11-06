@@ -1,12 +1,12 @@
-# LibJxl.Native: plan
+# MightyLittleJxl.Native: plan
 
 ## Why
 
-There is no official cross-platform NuGet package with native libjxl (the JPEG XL reference library) binaries. This repo builds libjxl from source and ships it as one standalone `.nupkg` for any .NET project that wants to P/Invoke libjxl on every common platform, with nothing installed on the machine. It assumes no particular consumer or use case. The package is published to a private NuGet feed.
+There is no official cross-platform NuGet package with native libjxl (the JPEG XL reference library) binaries. This repo builds libjxl from source and ships it as one standalone `.nupkg` for any .NET project that wants to P/Invoke libjxl on every common platform, with nothing installed on the machine. It assumes no particular consumer or use case. The package is published to nuget.org.
 
 ## What to build
 
-One NuGet package, `LibJxl.Native`, containing **only native binaries**: no managed assembly, no `lib/` folder. The consumer writes its own P/Invoke against libjxl's C API, so the package version must pin the exact libjxl version the binaries were built from.
+One NuGet package, `MightyLittleJxl.Native`, containing **only native binaries**: no managed assembly, no `lib/` folder. The consumer writes its own P/Invoke against libjxl's C API, so the package version must pin the exact libjxl version the binaries were built from.
 
 **Native libjxl for 8 runtime identifiers**, under `runtimes/<rid>/native/`:
 
@@ -50,11 +50,11 @@ A test-only harness in this repo (not packed) holds the minimal P/Invoke needed 
 
 ## Packaging
 
-- `src/LibJxl.Native/LibJxl.Native.csproj` is a packaging-only SDK-style project (`IncludeBuildOutput=false`, `SuppressDependenciesWhenPacking=true`, `NoWarn=NU5128`), packed with `dotnet pack`. It packs every `artifacts/native/<rid>/` library present to `runtimes/<rid>/native/<file>`. The package has no `lib/` folder and no dependencies, and installs into any target framework.
+- `src/MightyLittleJxl.Native/MightyLittleJxl.Native.csproj` is a packaging-only SDK-style project (`IncludeBuildOutput=false`, `SuppressDependenciesWhenPacking=true`, `NoWarn=NU5128`), packed with `dotnet pack`. It packs every `artifacts/native/<rid>/` library present to `runtimes/<rid>/native/<file>`. The package has no `lib/` folder and no dependencies, and installs into any target framework.
 - The version is read from `versions.env`: `PACKAGE_VERSION` if set, otherwise `LIBJXL_TAG` without the `v`.
 - Alpine gets the musl file: the package smoke test confirms .NET loads `runtimes/linux-musl-<arch>/native/` there, not the glibc one.
 - `THIRD-PARTY-NOTICES.md` (repo root, also packed) has the full licence texts: libjxl BSD-3-Clause plus its patent grant, Brotli MIT, Highway under BSD-3-Clause (it is dual-licensed), skcms BSD-3-Clause, and for the Windows DLLs the LLVM runtime (Apache-2.0 WITH LLVM-exception), MinGW-w64 runtime and winpthreads.
-- Package metadata: id `LibJxl.Native`, license expression `BSD-3-Clause AND MIT`, description naming the libjxl version and RIDs, `README.md` as the package readme, tags, project and repository URLs (`dotnet pack` records the commit).
+- Package metadata: id `MightyLittleJxl.Native`, license expression `BSD-3-Clause AND MIT`, description naming the libjxl version and RIDs, `README.md` as the package readme, tags, project and repository URLs (`dotnet pack` records the commit).
 
 ## Tests
 
@@ -98,7 +98,7 @@ Actions are pinned by commit SHA. All runners are GitHub-hosted and free for pub
 3. `djxl`: every RID's encoded files must decode with Ubuntu's `djxl` to exactly the source pixels.
 4. `package`: gathers all eight tested libraries and runs `pack.sh`.
 5. `smoke` (8 jobs): smoke-tests the final `.nupkg` on every RID's runner.
-6. `release`, on main only: if no GitHub release `v<version>` exists yet, push the `.nupkg` to the feed (`dotnet nuget push --skip-duplicate`, secrets `NUGET_SOURCE` and `NUGET_API_KEY`; skipped with a warning if unset), then create the release with the `.nupkg` attached. So merging a new version to main publishes it, and other merges publish nothing.
+6. `release`, on main only: if no GitHub release `v<version>` exists yet, push the `.nupkg` to nuget.org (`dotnet nuget push --skip-duplicate`), then create the release with the `.nupkg` attached. It authenticates with nuget.org Trusted Publishing: the job runs in the `nuget` environment (deployable from `main` only), and `NuGet/login` exchanges its OIDC token for a short-lived API key; the nuget.org policy for `MightyLittleJxl.*` accepts only `bjornsallarp/libjxl-native`, `ci.yml`, environment `nuget`. No secret is stored. So merging a new version to main publishes it, and other merges publish nothing.
 
 **`update.yml`** runs weekly (Monday 06:00 UTC) and on dispatch. If libjxl's latest release differs from `LIBJXL_TAG`, it commits a bump (tag, commit, README version, drops `PACKAGE_VERSION`) to `bump/libjxl-<tag>`, opens a PR, and dispatches `ci.yml` on that branch, since pushes and PRs made with `GITHUB_TOKEN` trigger no workflows. Its checks show on the PR; merging releases. It needs the repo setting "Allow GitHub Actions to create and approve pull requests".
 
@@ -126,7 +126,7 @@ The harness, and the performance criterion below, use:
 - [x] Lossless effort-1 encode of a 2048×2048 RGB image takes ≤ 20 ms single-threaded on an M-series Mac, close to `cjxl -d 0 -e 1 --num_threads=0`. This confirms an optimised build (release flags, highway SIMD dispatch) rather than serving any one use case. (Median 10.8 ms; `cjxl` v0.12.0 takes 13.1 ms on the same image, output within 2 bytes.)
 - [x] A fresh `dotnet new console` with only this `.nupkg` in a local folder source restores, builds and runs encode → decode on macOS, Windows, glibc Linux and Alpine, with nothing installed on the machine. (A copy of the harness stands in for the console app: `smoke.sh` / `smoke.ps1`.)
 - [x] `README.md` covers the consumer documentation above, and how CI builds, tests and releases, how to run it locally, and how bumps and repacks work.
-- [ ] `ci.yml` passes on main for all eight RIDs and creates the `v0.12.0` release (and pushes to the feed once its secrets are set).
+- [ ] `ci.yml` passes on main for all eight RIDs and publishes `v0.12.0` to nuget.org and as a GitHub release.
 - [ ] `update.yml` opens a bump PR with a passing CI run when libjxl releases a new version (can be exercised by dispatching it against an older pin).
 
 ## Out of scope
