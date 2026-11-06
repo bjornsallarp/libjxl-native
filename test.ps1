@@ -16,7 +16,8 @@ dotnet build tests/Harness -c Release -o build/harness --nologo -v quiet
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 $env:JXL_NATIVE_PATH = (Resolve-Path "$dir/jxl_native.dll").Path
-$log = & dotnet build/harness/Harness.dll 2>&1
+# The dump (encoded .jxl plus source pixels) is uploaded for the djxl cross-check.
+$log = & dotnet build/harness/Harness.dll --dump build/dump 2>&1
 $code = $LASTEXITCODE
 $log | Write-Host
 if ($code) { exit $code }
