@@ -1,0 +1,7 @@
+bin/
+obj/
+artifacts/
+build/
+.DS_Store
+*.nupkg
+!packages/*.nupkg
