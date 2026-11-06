@@ -77,7 +77,7 @@ Where each RID runs:
 
 `test.sh <rid>|all` runs the Docker and Mac tests. `Harness.dll --dump <dir>` writes each encoded `.jxl` and its source pixels, for cross-checking with `djxl`.
 
-**djxl cross-check (2026-11-06):** the 24 `.jxl` files encoded on the six non-Windows RIDs all decode with Homebrew's `djxl` v0.12.0 to exactly the source pixels. The encoded bytes are identical across RIDs except `osx-x64` under Rosetta, which picks a different SIMD target and so makes slightly different (still lossless) encoder choices. Windows is still to do. Running x64 binaries under emulation proves they load and round-trip correctly, but performance is only measured natively on `osx-arm64`.
+**djxl cross-check (2026-11-06):** the 32 `.jxl` files encoded on all eight RIDs decode with Homebrew's `djxl` v0.12.0 to exactly the source pixels (`scripts/djxl-check.sh`; Windows files from the workflow's `windows-dump-<rid>` artifacts, run 42233817821). The encoded bytes are identical across RIDs, Windows included, except `osx-x64` under Rosetta, which picks a different SIMD target and so makes slightly different (still lossless) encoder choices. Running x64 binaries under emulation proves they load and round-trip correctly, but performance is only measured natively on `osx-arm64`.
 
 ### Windows workflow
 
