@@ -16,7 +16,8 @@ run_harness() {
         linux-musl-arm64) image=$DOTNET_RUNTIME_ALPINE_ARM64_IMAGE platform=linux/arm64 ;;
         *) echo "unknown rid: $rid" >&2; return 1 ;;
       esac
-      local docker=(docker run --rm --platform "$platform" -v "$app:/app:ro")
+      # As the calling user, so the dump stays writable on Linux hosts.
+      local docker=(docker run --rm --platform "$platform" --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$app:/app:ro")
       if [[ -n $native ]]; then
         docker+=(-v "$(dirname "$native"):/native:ro" -e "JXL_NATIVE_PATH=/native/$(basename "$native")")
       fi
