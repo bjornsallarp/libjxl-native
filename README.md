@@ -33,6 +33,8 @@ static partial class Jxl
 }
 ```
 
+`[LibraryImport]` needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` in your project; `[DllImport]` works too.
+
 The exported API is exactly libjxl's public C API at [v0.12.0](https://github.com/libjxl/libjxl/tree/v0.12.0/lib/include/jxl): the encoder and decoder (`jxl/encode.h`, `jxl/decode.h`), the colour management system (`jxl/cms.h`) and both thread runners (`jxl/thread_parallel_runner.h`, `jxl/resizable_parallel_runner.h`). That's 115 functions, the same set upstream's own shared libraries export. `jxl/gain_map.h` and `jxl/compressed_icc.h` are not included, because upstream builds them into a separate extras library.
 
 Struct layouts and enums can change between libjxl versions, so write your binding against the headers of the libjxl version the package version names.

@@ -33,7 +33,8 @@
   <ItemGroup>
     <None Include="$(NativeDir)**/libjxl_native.so;$(NativeDir)**/libjxl_native.dylib;$(NativeDir)**/jxl_native.dll"
           Pack="true" PackagePath="runtimes/%(RecursiveDir)native/%(Filename)%(Extension)" />
-    <None Include="$(RepoRoot)README.md;$(RepoRoot)THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+    <!-- The package readme is for consumers only; the repo README also covers building. -->
+    <None Include="README.md;$(RepoRoot)THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>

@@ -54,7 +54,7 @@ A test-only harness in this repo (not packed) holds the minimal P/Invoke needed 
 - The version is read from `versions.env`: `PACKAGE_VERSION` if set, otherwise `LIBJXL_TAG` without the `v`.
 - Alpine gets the musl file: the package smoke test confirms .NET loads `runtimes/linux-musl-<arch>/native/` there, not the glibc one.
 - `THIRD-PARTY-NOTICES.md` (repo root, also packed) has the full licence texts: libjxl BSD-3-Clause plus its patent grant, Brotli MIT, Highway under BSD-3-Clause (it is dual-licensed), skcms BSD-3-Clause, and for the Windows DLLs the LLVM runtime (Apache-2.0 WITH LLVM-exception), MinGW-w64 runtime and winpthreads.
-- Package metadata: id `MightyLittleJxl.Native`, license expression `BSD-3-Clause AND MIT`, description naming the libjxl version and RIDs, `README.md` as the package readme, tags, project and repository URLs (`dotnet pack` records the commit).
+- Package metadata: id `MightyLittleJxl.Native`, license expression `BSD-3-Clause AND MIT`, description naming the libjxl version and RIDs, `src/MightyLittleJxl.Native/README.md` as the package readme, tags, project and repository URLs (`dotnet pack` records the commit).
 
 ## Tests
 
@@ -111,7 +111,7 @@ The harness, and the performance criterion below, use:
 
 ## Consumer documentation
 
-`README.md` (also packed as the package readme) tells consumers:
+The package readme (`src/MightyLittleJxl.Native/README.md`, consumers only) and the repo `README.md` tell consumers:
 
 - The library name to P/Invoke (`"jxl_native"`) and which RIDs are included.
 - That the exported API is exactly libjxl's public C API at the pinned tag, with a link to that tag's headers. Struct layouts and enums can change between libjxl versions, so a binding must match the package version.
