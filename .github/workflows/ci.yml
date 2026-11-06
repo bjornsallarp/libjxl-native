@@ -1,0 +1,200 @@
+name: ci
+
+# Builds libjxl_native for every RID on a runner of that platform, tests each on
+# that RID, cross-checks every encoded file with djxl, packs the .nupkg and
+# smoke-tests it on every RID. On main, a package version that isn't released yet
+# is pushed to the NuGet feed and published as a GitHub release.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  native:
+    name: build + test ${{ matrix.rid }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: linux-x64, os: ubuntu-24.04 }
+          - { rid: linux-musl-x64, os: ubuntu-24.04 }
+          - { rid: linux-arm64, os: ubuntu-24.04-arm }
+          - { rid: linux-musl-arm64, os: ubuntu-24.04-arm }
+          - { rid: osx-arm64, os: macos-15 }
+          - { rid: osx-x64, os: macos-15-intel }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+      - run: ./build.sh ${{ matrix.rid }}
+      - run: ./test.sh ${{ matrix.rid }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.rid }}
+          path: artifacts/native/${{ matrix.rid }}/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dump-${{ matrix.rid }}
+          path: build/dump/${{ matrix.rid }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Windows DLLs cross-compile in the llvm-mingw image, then test on Windows.
+  windows-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: ./build.sh win-x64 win-arm64
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-built
+          path: |
+            artifacts/native/win-x64/
+            artifacts/native/win-arm64/
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-test:
+    name: test ${{ matrix.rid }}
+    needs: windows-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64, os: windows-2025 }
+          - { rid: win-arm64, os: windows-11-arm }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-built
+          path: artifacts/native
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+      - run: ./test.ps1 -Rid ${{ matrix.rid }}
+        shell: pwsh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.rid }}
+          path: artifacts/native/${{ matrix.rid }}/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dump-${{ matrix.rid }}
+          path: build/dump/${{ matrix.rid }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Every file encoded by every RID must decode with libjxl's own djxl (the
+  # distro's build, so a different libjxl version) to exactly the source pixels.
+  djxl:
+    needs: [native, windows-test]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dump-*
+          path: build/dump
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libjxl-tools
+      - run: scripts/djxl-check.sh build/dump
+
+  package:
+    needs: [native, windows-test]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: native-*
+          path: build/download
+      - name: Arrange as artifacts/native/<rid>
+        run: |
+          mkdir -p artifacts/native
+          for d in build/download/native-*; do mv "$d" "artifacts/native/${d#build/download/native-}"; done
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+      - run: ./pack.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package
+          path: artifacts/package/*.nupkg
+          if-no-files-found: error
+
+  smoke:
+    name: smoke ${{ matrix.rid }}
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: linux-x64, os: ubuntu-24.04 }
+          - { rid: linux-musl-x64, os: ubuntu-24.04 }
+          - { rid: linux-arm64, os: ubuntu-24.04-arm }
+          - { rid: linux-musl-arm64, os: ubuntu-24.04-arm }
+          - { rid: osx-arm64, os: macos-15 }
+          - { rid: osx-x64, os: macos-15-intel }
+          - { rid: win-x64, os: windows-2025 }
+          - { rid: win-arm64, os: windows-11-arm }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+          path: artifacts/package
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+      - if: runner.os != 'Windows'
+        run: ./smoke.sh ${{ matrix.rid }}
+      - if: runner.os == 'Windows'
+        run: ./smoke.ps1 -Rid ${{ matrix.rid }}
+        shell: pwsh
+
+  release:
+    needs: [package, smoke, djxl]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+          path: artifacts/package
+      - name: Publish if this version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUGET_SOURCE: ${{ secrets.NUGET_SOURCE }}
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          nupkg=$(ls artifacts/package/LibJxl.Native.*.nupkg)
+          version=$(basename "$nupkg" .nupkg); version=${version#LibJxl.Native.}
+          if gh release view "v$version" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$version is already released"; exit 0
+          fi
+          # Feed first: --skip-duplicate makes a retry safe, and the release then
+          # marks the version as done.
+          if [[ -n $NUGET_SOURCE && -n $NUGET_API_KEY ]]; then
+            dotnet nuget push "$nupkg" --source "$NUGET_SOURCE" --api-key "$NUGET_API_KEY" --skip-duplicate
+          else
+            echo "::warning::NUGET_SOURCE / NUGET_API_KEY secrets not set; not pushed to a feed"
+          fi
+          gh release create "v$version" "$nupkg" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "LibJxl.Native $version" \
+            --notes "Native libjxl for linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64, osx-x64, osx-arm64, win-x64 and win-arm64. Built, tested and smoke-tested by [this run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."

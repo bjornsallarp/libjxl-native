@@ -43,38 +43,35 @@ For a fuller example, see the [test harness](https://github.com/bjornsallarp/lib
 
 libjxl and Highway are BSD-3-Clause, Brotli is MIT, and skcms is BSD-3-Clause. The Windows libraries also contain the LLVM and MinGW-w64 runtimes. Full texts are in [`THIRD-PARTY-NOTICES.md`](https://github.com/bjornsallarp/libjxl-native/blob/main/THIRD-PARTY-NOTICES.md), which is also in the package.
 
-## Building
+## How it's built and released
 
-Everything builds on an Apple silicon Mac: Linux and Windows in Docker, macOS natively. Windows is tested on GitHub-hosted runners. [`PLAN.md`](https://github.com/bjornsallarp/libjxl-native/blob/main/PLAN.md) has the full requirements and design decisions.
+Everything runs on GitHub Actions; [`PLAN.md`](https://github.com/bjornsallarp/libjxl-native/blob/main/PLAN.md) has the full requirements and design decisions. Inputs are pinned in [`versions.env`](https://github.com/bjornsallarp/libjxl-native/blob/main/versions.env): the libjxl tag and commit, and every build and test image by digest.
 
-**Prerequisites:** Docker Desktop with Rosetta emulation for amd64, Rosetta 2, Xcode Command Line Tools, `cmake` and `ninja` (Homebrew), the .NET 10 SDK, `gh` logged in to an account that can run this repo's workflows, and `djxl` (`brew install jpeg-xl`) for the cross-check.
+[`ci.yml`](https://github.com/bjornsallarp/libjxl-native/blob/main/.github/workflows/ci.yml) runs on every push and pull request:
 
-Inputs are pinned in [`versions.env`](https://github.com/bjornsallarp/libjxl-native/blob/main/versions.env): the libjxl tag and commit, and the base images by digest.
+1. **Build and test** each runtime on a runner of its own platform. The build fails if the exported functions don't match libjxl's public headers, or if the library depends on anything outside its allowed list. The test round-trips four 2048×2048 images losslessly and checks every byte.
+2. **Cross-check** every encoded file with libjxl's own `djxl`, which must decode it to exactly the source pixels.
+3. **Pack** the eight tested libraries into the `.nupkg`.
+4. **Smoke-test the package** on all eight runtimes: a fresh project restores it from a local folder and encodes and decodes, with .NET picking the library from `runtimes/<rid>/native/`.
+5. **Release**, on `main` only: if this package version isn't released yet, push it to the NuGet feed and create a GitHub release with the `.nupkg` attached.
+
+[`update.yml`](https://github.com/bjornsallarp/libjxl-native/blob/main/.github/workflows/update.yml) checks weekly for a new libjxl release. When there is one, it opens a pull request that bumps `versions.env` and runs CI on it. Merging the pull request releases the new version.
+
+To repack the same libjxl, for example after a build fix, add `PACKAGE_VERSION=<libjxl version>.1` to `versions.env` and merge.
+
+### Setup
+
+- Repository secrets `NUGET_SOURCE` (the feed's push URL) and `NUGET_API_KEY`. Without them, releases are created on GitHub only.
+- Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests", so `update.yml` can open its pull request.
+
+### Running locally
+
+The same scripts run on an Apple silicon Mac, for debugging. Prerequisites: Docker Desktop with Rosetta emulation for amd64, Rosetta 2, Xcode Command Line Tools, `cmake` and `ninja`, the .NET 10 SDK, and `djxl` (`brew install jpeg-xl`).
 
 | Step | Command |
 |---|---|
-| Build, macOS and Linux | `./build.sh` (or `./build.sh <rid>...`) → `artifacts/native/<rid>/` |
-| Test, macOS and Linux | `./test.sh` (or `./test.sh <rid>...`); osx-x64 runs under Rosetta |
-| Build and test Windows | `gh workflow run windows.yml --ref main`, then `./fetch-windows.sh` once it passes |
-| Cross-check with djxl | `dotnet build/harness/Harness.dll --dump <dir>` per RID, then `scripts/djxl-check.sh <dir>` |
-| Pack and smoke-test | `./pack.sh` → `artifacts/package/LibJxl.Native.<version>.nupkg` |
-
-`build.sh` fails if the exported functions don't match libjxl's public headers, or if a library depends on anything outside its allowed list. `pack.sh` refuses to pack a runtime without a passing test result. It then restores the `.nupkg` from a local folder into a copy of the harness and runs it on every Linux and macOS runtime. The Windows workflow does the same on Windows.
-
-### Releasing
-
-1. Build, test and pack as above, on a clean commit.
-2. Push to the feed:
-   ```sh
-   dotnet nuget push artifacts/package/LibJxl.Native.<version>.nupkg --source <feed> --api-key <key>
-   ```
-3. Tag the commit `v<version>` and push the tag.
-
-### Bumping libjxl
-
-1. Set `LIBJXL_TAG` and `LIBJXL_COMMIT` in `versions.env`. Get the commit with `git ls-remote https://github.com/libjxl/libjxl.git refs/tags/<tag>`.
-2. Delete `build/` so the source is fetched again.
-3. Build, test and pack everything as above. The package version follows the tag.
-4. If the export check fails, compare the new public headers with the export list in `scripts/build-native.sh`, and update the README's export count.
-
-To repack the same libjxl, for example after a build fix, pass a fourth version part: `./pack.sh -p:PackageVersion=0.12.0.1`.
+| Build | `./build.sh [<rid>...]`, all eight by default (Windows cross-compiles in Docker) → `artifacts/native/<rid>/` |
+| Test | `./test.sh [<rid>...]`, Linux in Docker and macOS on the Mac. Windows only runs in CI (`test.ps1`). |
+| Cross-check | `scripts/djxl-check.sh build/dump` |
+| Pack | `./pack.sh` → `artifacts/package/LibJxl.Native.<version>.nupkg` (needs a passing test for every runtime present) |
+| Smoke-test | `./smoke.sh [<rid>...]` |
