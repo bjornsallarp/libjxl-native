@@ -10,10 +10,10 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
-  <!-- Package smoke test: -p:LibJxlNativeVersion=<v> resolves jxl_native from the
+  <!-- Package smoke test: -p:NativePackageVersion=<v> resolves jxl_native from the
        .nupkg (runtimes/<rid>/native/) instead of JXL_NATIVE_PATH. -->
-  <ItemGroup Condition="'$(LibJxlNativeVersion)' != ''">
-    <PackageReference Include="LibJxl.Native" Version="$(LibJxlNativeVersion)" />
+  <ItemGroup Condition="'$(NativePackageVersion)' != ''">
+    <PackageReference Include="MightyLittleJxl.Native" Version="$(NativePackageVersion)" />
   </ItemGroup>
 
 </Project>

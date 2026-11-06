@@ -25,10 +25,14 @@ fetch_source() {
   fi
 }
 
+# Run containers as the calling user: on Linux hosts, root-owned outputs would
+# otherwise be unwritable for the later test step.
+as_me=(--user "$(id -u):$(id -g)" -e HOME=/tmp)
+
 # Runs build-native.sh in <image> for <platform>, with the repo mounted at /repo.
 in_docker() {
   local rid=$1 image=$2 platform=$3
-  docker run --rm --platform "$platform" --env-file versions.env \
+  docker run --rm --platform "$platform" "${as_me[@]}" --env-file versions.env \
     -v "$root:/repo" -w /repo "$image" \
     bash scripts/build-native.sh "$rid" "/repo/$src" "/repo/build/$rid" "/repo/artifacts/native/$rid"
 }
@@ -50,7 +54,7 @@ for rid in "${rids[@]}"; do
     linux-musl-arm64) in_docker "$rid" "$(musl_image linux/arm64)" linux/arm64 ;;
     # Cross-compiled, so the container runs at the host's native architecture.
     win-x64 | win-arm64)
-      docker run --rm --env-file versions.env -v "$root:/repo" -w /repo "$LLVM_MINGW_IMAGE" \
+      docker run --rm "${as_me[@]}" --env-file versions.env -v "$root:/repo" -w /repo "$LLVM_MINGW_IMAGE" \
         bash scripts/build-native.sh "$rid" "/repo/$src" "/repo/build/$rid" "/repo/artifacts/native/$rid" ;;
     osx-arm64 | osx-x64) scripts/build-native.sh "$rid" "$root/$src" "$root/build/$rid" "$root/artifacts/native/$rid" ;;
     *) echo "unknown or not yet supported rid: $rid" >&2; exit 1 ;;

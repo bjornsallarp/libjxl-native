@@ -4,8 +4,8 @@ using Harness;
 
 // JXL_NATIVE_PATH points at a freshly built library; without it, normal
 // resolution applies (runtimes/<rid>/native/ from the package).
-var nativePath = Environment.GetEnvironmentVariable("JXL_NATIVE_PATH");
-if (!string.IsNullOrEmpty(nativePath))
+var nativePath = Environment.GetEnvironmentVariable("JXL_NATIVE_PATH") is { Length: > 0 } p ? p : null;
+if (nativePath != null)
 {
     NativeLibrary.SetDllImportResolver(typeof(Jxl).Assembly,
         (name, _, _) => name == Jxl.Lib ? NativeLibrary.Load(nativePath) : 0);
@@ -15,7 +15,7 @@ Console.WriteLine($"runtime: {RuntimeInformation.RuntimeIdentifier} ({RuntimeInf
 var v = Jxl.JxlEncoderVersion();
 // On Linux, show which file the runtime actually loaded, e.g. musl vs glibc from the package.
 var loaded = nativePath;
-if (string.IsNullOrEmpty(loaded) && OperatingSystem.IsLinux())
+if (loaded == null && OperatingSystem.IsLinux())
     loaded = File.ReadLines("/proc/self/maps").Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         .Select(p => p[^1]).FirstOrDefault(p => p.EndsWith("libjxl_native.so"));
 Console.WriteLine($"library: {loaded ?? "(package)"}");

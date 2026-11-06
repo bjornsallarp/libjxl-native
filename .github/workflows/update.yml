@@ -1,0 +1,54 @@
+name: update
+
+# Weekly: if libjxl has a newer release than versions.env pins, open a PR that bumps
+# it and start ci on that branch. Merging the PR releases the new package.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Bump libjxl if a new release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source versions.env
+          latest=$(gh api repos/libjxl/libjxl/releases/latest --jq .tag_name)
+          if [[ $latest == "$LIBJXL_TAG" ]]; then echo "up to date: $latest"; exit 0; fi
+
+          branch=bump/libjxl-$latest
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "$branch already exists; see its pull request"; exit 0
+          fi
+          commit=$(gh api "repos/libjxl/libjxl/commits/$latest" --jq .sha)
+
+          sed -i -e "s/^LIBJXL_TAG=.*/LIBJXL_TAG=$latest/" -e "s/^LIBJXL_COMMIT=.*/LIBJXL_COMMIT=$commit/" \
+            -e '/^PACKAGE_VERSION=/d' versions.env
+          old=${LIBJXL_TAG#v} new=${latest#v}
+          sed -i "s/${old//./\\.}/$new/g" README.md
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git commit -am "Bump libjxl to $latest"
+          git push origin "$branch"
+
+          gh pr create --base main --head "$branch" --title "Bump libjxl to $latest" --body "$(cat <<EOF
+          libjxl [$latest](https://github.com/libjxl/libjxl/releases/tag/$latest) is out (pinned: $LIBJXL_TAG).
+
+          This bumps \`LIBJXL_TAG\` and \`LIBJXL_COMMIT\` in \`versions.env\` and the version in \`README.md\`. ci runs on this branch: every RID is built, tested, cross-checked with djxl and smoke-tested as a package. Merging releases \`MightyLittleJxl.Native $new\`.
+
+          Before merging, check the [changelog](https://github.com/libjxl/libjxl/blob/$latest/CHANGELOG.md) for C API changes consumers' bindings need, and the export count in the README.
+          EOF
+          )"
+          # Pushes and PRs made with GITHUB_TOKEN don't trigger workflows; a dispatch does.
+          gh workflow run ci.yml --ref "$branch"

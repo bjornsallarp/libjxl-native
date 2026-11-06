@@ -11,12 +11,15 @@
 
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))</RepoRoot>
     <NativeDir>$(RepoRoot)artifacts/native/</NativeDir>
-    <!-- The package version follows LIBJXL_TAG in versions.env; a repack of the same
-         libjxl overrides it with -p:PackageVersion=0.12.0.1. -->
-    <LibjxlVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(RepoRoot)versions.env')), '(?&lt;=LIBJXL_TAG=v)[0-9.]+').Value)</LibjxlVersion>
+    <!-- The package version follows LIBJXL_TAG in versions.env. A repack of the same
+         libjxl sets PACKAGE_VERSION there (e.g. 0.12.0.1), which CI then releases. -->
+    <VersionsEnv>$([System.IO.File]::ReadAllText('$(RepoRoot)versions.env'))</VersionsEnv>
+    <LibjxlVersion>$([System.Text.RegularExpressions.Regex]::Match($(VersionsEnv), '(?&lt;=LIBJXL_TAG=v)[0-9.]+').Value)</LibjxlVersion>
+    <PackageVersionOverride>$([System.Text.RegularExpressions.Regex]::Match($(VersionsEnv), '(?m)(?&lt;=^PACKAGE_VERSION=)[0-9A-Za-z.-]+').Value)</PackageVersionOverride>
     <Version>$(LibjxlVersion)</Version>
+    <Version Condition="'$(PackageVersionOverride)' != ''">$(PackageVersionOverride)</Version>
 
-    <PackageId>LibJxl.Native</PackageId>
+    <PackageId>MightyLittleJxl.Native</PackageId>
     <Authors>Björn Sållarp</Authors>
     <Description>Native libjxl $(LibjxlVersion) (JPEG XL reference library) for P/Invoke: one self-contained library per runtime, exporting libjxl's full C API (encoder, decoder, CMS and thread runners). No managed code. Runtimes: linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64, osx-x64, osx-arm64, win-x64, win-arm64.</Description>
     <PackageTags>jpegxl jxl libjxl jpeg-xl native pinvoke</PackageTags>

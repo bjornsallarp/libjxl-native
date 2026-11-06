@@ -1,12 +1,12 @@
-# LibJxl.Native: plan
+# MightyLittleJxl.Native: plan
 
 ## Why
 
-There is no official cross-platform NuGet package with native libjxl (the JPEG XL reference library) binaries. This repo builds libjxl from source and ships it as one standalone `.nupkg` for any .NET project that wants to P/Invoke libjxl on every common platform, with nothing installed on the machine. It assumes no particular consumer or use case. The package is published to a private NuGet feed.
+There is no official cross-platform NuGet package with native libjxl (the JPEG XL reference library) binaries. This repo builds libjxl from source and ships it as one standalone `.nupkg` for any .NET project that wants to P/Invoke libjxl on every common platform, with nothing installed on the machine. It assumes no particular consumer or use case. The package is published to nuget.org.
 
 ## What to build
 
-One NuGet package, `LibJxl.Native`, containing **only native binaries**: no managed assembly, no `lib/` folder. The consumer writes its own P/Invoke against libjxl's C API, so the package version must pin the exact libjxl version the binaries were built from.
+One NuGet package, `MightyLittleJxl.Native`, containing **only native binaries**: no managed assembly, no `lib/` folder. The consumer writes its own P/Invoke against libjxl's C API, so the package version must pin the exact libjxl version the binaries were built from.
 
 **Native libjxl for 8 runtime identifiers**, under `runtimes/<rid>/native/`:
 
@@ -22,19 +22,19 @@ One NuGet package, `LibJxl.Native`, containing **only native binaries**: no mana
 
 A test-only harness in this repo (not packed) holds the minimal P/Invoke needed to exercise the binaries; see [Tests](#tests).
 
-Everything is built locally on an Apple silicon Mac: Linux and Windows in Docker, macOS natively. Linux and macOS are also tested locally. Windows is tested on GitHub-hosted runners through one manually triggered workflow; there is no other CI.
+**Everything is automated on GitHub Actions** (free for this public repo): every RID is built and tested on a runner of its own platform, the package is packed and smoke-tested everywhere, new libjxl releases open a bump PR, and merging to main releases. See [CI](#ci-github-actions). The same scripts run locally on an Apple silicon Mac (Linux and Windows builds in Docker, macOS natively) for debugging.
 
-### Prerequisites on the Mac
+### Local prerequisites (optional, Mac)
 
 - Docker Desktop or OrbStack, with Rosetta for amd64 emulation enabled.
 - Rosetta 2 (`softwareupdate --install-rosetta`).
 - Xcode Command Line Tools, plus `cmake`, `ninja` and `git` (Homebrew).
-- .NET 10 SDK for arm64. `test.sh` runs `osx-x64` under Rosetta with an x64 .NET runtime, which it installs into `build/dotnet-x64` if no x64 SDK is installed side by side.
-- `gh` CLI, logged in, to trigger the Windows workflow and download its results.
+- .NET 10 SDK. `test.sh`/`smoke.sh` run `osx-x64` under Rosetta with an x64 .NET runtime, installed into `build/dotnet-x64` unless an x64 SDK is installed side by side.
+- Windows can't be tested locally; CI does it.
 
 ## Native build requirements
 
-- **libjxl version:** pin the latest stable tag, currently `v0.12.0` (2026-07-01). The package version follows it (`0.12.0`). A repack of the same libjxl bumps a fourth part or uses a suffix the agent picks and documents here.
+- **libjxl version:** pin the latest stable tag, currently `v0.12.0` (2026-07-01), in `versions.env` (`LIBJXL_TAG` + `LIBJXL_COMMIT`). The package version follows it (`0.12.0`). A repack of the same libjxl adds `PACKAGE_VERSION=0.12.0.1` (a fourth part) to `versions.env`.
 - **One self-contained shared library per RID.**
   - Link libjxl, libjxl_cms and libjxl_threads and their dependencies (highway, brotli, skcms; no lcms2 needed) statically into a single library.
   - The only allowed runtime dependencies are the OS's own: libc/libm/libpthread, and libc++ on macOS. On Linux, link libstdc++ and libgcc statically. On Windows, llvm-mingw with `-static`, leaving only system DLLs (KERNEL32 and the UCRT, which ships with Windows 10+).
@@ -43,18 +43,18 @@ Everything is built locally on an Apple silicon Mac: Linux and Windows in Docker
 - **Portability baselines:**
   - glibc: built on manylinux_2_28 (AlmaLinux 8, GCC 14). **glibc floor: 2.27** (highest versioned symbol required, x64 and arm64).
   - musl: build on Alpine 3.20 or newer, matching the .NET Alpine images.
-  - macOS: built natively on the Mac host with the Xcode command line tools, deployment target 13.0. `osx-x64` is cross-compiled with `-arch x86_64`.
+  - macOS: built with the Xcode command line tools, deployment target 13.0. CI builds each arch natively (`macos-15`, `macos-15-intel`); on an Apple silicon Mac `osx-x64` is cross-compiled with `-arch x86_64`.
   - Windows: x64 and arm64 cross-compiled with llvm-mingw (clang, UCRT) in a Linux Docker container, at the host's native architecture. Runtime dependencies are KERNEL32 and the UCRT's `api-ms-win-crt-*` API sets, so Windows 10 or later (as .NET 10 requires anyway).
-- **Build hosts:** Linux and Windows builds run in Docker on the Mac. arm64 images run natively; x64 images run under emulation (`--platform linux/amd64`), which is slower but keeps each build in its target's own image. The Windows workflow runs the same `build.sh` in the same pinned image on a GitHub Linux runner.
+- **Build hosts:** Linux and Windows builds run in Docker, in each target's own pinned image. In CI every Linux build runs on a runner of its own architecture; on a Mac, x64 images run under emulation (`--platform linux/amd64`).
 - **Reproducible:** one `build.sh <rid>|all` that runs the right Docker image or, for macOS, the host toolchain, and writes `artifacts/native/<rid>/`. Pin the base images by digest and the libjxl tag; clone submodules for the vendored deps.
 
 ## Packaging
 
-- `src/LibJxl.Native/LibJxl.Native.csproj` is a packaging-only SDK-style project (`IncludeBuildOutput=false`, `SuppressDependenciesWhenPacking=true`, `NoWarn=NU5128`), packed with `dotnet pack`. It packs every `artifacts/native/<rid>/` library present to `runtimes/<rid>/native/<file>`. The package has no `lib/` folder and no dependencies, and installs into any target framework.
-- The version is read from `LIBJXL_TAG` in `versions.env`; a repack overrides it with `-p:PackageVersion=0.12.0.1`.
+- `src/MightyLittleJxl.Native/MightyLittleJxl.Native.csproj` is a packaging-only SDK-style project (`IncludeBuildOutput=false`, `SuppressDependenciesWhenPacking=true`, `NoWarn=NU5128`), packed with `dotnet pack`. It packs every `artifacts/native/<rid>/` library present to `runtimes/<rid>/native/<file>`. The package has no `lib/` folder and no dependencies, and installs into any target framework.
+- The version is read from `versions.env`: `PACKAGE_VERSION` if set, otherwise `LIBJXL_TAG` without the `v`.
 - Alpine gets the musl file: the package smoke test confirms .NET loads `runtimes/linux-musl-<arch>/native/` there, not the glibc one.
 - `THIRD-PARTY-NOTICES.md` (repo root, also packed) has the full licence texts: libjxl BSD-3-Clause plus its patent grant, Brotli MIT, Highway under BSD-3-Clause (it is dual-licensed), skcms BSD-3-Clause, and for the Windows DLLs the LLVM runtime (Apache-2.0 WITH LLVM-exception), MinGW-w64 runtime and winpthreads.
-- Package metadata: id `LibJxl.Native`, license expression `BSD-3-Clause AND MIT`, description naming the libjxl version and RIDs, `README.md` as the package readme, tags, project and repository URLs (`dotnet pack` records the commit).
+- Package metadata: id `MightyLittleJxl.Native`, license expression `BSD-3-Clause AND MIT`, description naming the libjxl version and RIDs, `README.md` as the package readme, tags, project and repository URLs (`dotnet pack` records the commit).
 
 ## Tests
 
@@ -69,34 +69,38 @@ Where each RID runs:
 
 | RID | Test host |
 |---|---|
-| `linux-x64`, `linux-arm64` | `mcr.microsoft.com/dotnet/runtime:10.0` (Ubuntu 24.04) in Docker (x64 emulated) |
-| `linux-musl-x64`, `linux-musl-arm64` | `mcr.microsoft.com/dotnet/runtime:10.0-alpine` in Docker (x64 emulated) |
-| `osx-arm64` | Mac host |
-| `osx-x64` | Mac host under Rosetta, with an x64 .NET runtime |
-| `win-x64` | GitHub `windows-2025` runner |
-| `win-arm64` | GitHub `windows-11-arm` runner |
+| RID | CI runner | Test host |
+|---|---|---|
+| `linux-x64`, `linux-musl-x64` | `ubuntu-24.04` | `mcr.microsoft.com/dotnet/runtime:10.0` / `:10.0-alpine` in Docker |
+| `linux-arm64`, `linux-musl-arm64` | `ubuntu-24.04-arm` | same images, arm64 |
+| `osx-arm64` | `macos-15` | the runner |
+| `osx-x64` | `macos-15-intel` | the runner (locally: Rosetta) |
+| `win-x64` | `windows-2025` | the runner (`test.ps1`) |
+| `win-arm64` | `windows-11-arm` | the runner (`test.ps1`) |
 
-`test.sh <rid>|all` runs the Docker and Mac tests. `Harness.dll --dump <dir>` writes each encoded `.jxl` and its source pixels, for cross-checking with `djxl`.
+`test.sh <rid>|all` (Linux, macOS) and `test.ps1 -Rid <rid>` (Windows) run the harness and dump each encoded `.jxl` with its source pixels to `build/dump/<rid>/`; `scripts/djxl-check.sh` decodes those with `djxl`. CI runs that check on all eight RIDs' dumps with Ubuntu's `djxl` (libjxl-tools), a different libjxl version.
 
 **djxl cross-check (2026-11-06):** the 32 `.jxl` files encoded on all eight RIDs decode with Homebrew's `djxl` v0.12.0 to exactly the source pixels (`scripts/djxl-check.sh`; Windows files from the workflow's `windows-dump-<rid>` artifacts, run 42233817821). The encoded bytes are identical across RIDs, Windows included, except `osx-x64` under Rosetta, which picks a different SIMD target and so makes slightly different (still lossless) encoder choices. Running x64 binaries under emulation proves they load and round-trip correctly, but performance is only measured natively on `osx-arm64`.
 
-### Windows workflow
+## Pack and smoke test
 
-`.github/workflows/windows.yml`, triggered only by `workflow_dispatch` (`gh workflow run windows.yml --ref <commit>`):
+- `pack.sh` takes every `artifacts/native/<rid>/`, refuses to pack if any lacks a passing `test-result.txt` (a rebuild clears it) or a required RID is missing, and runs `dotnet pack` into `artifacts/package/`.
+- `smoke.sh <rid>...` (Linux, macOS) and `smoke.ps1 -Rid <rid>` (Windows) smoke-test the `.nupkg` the way a consumer uses it: a fresh copy of the harness restores it from that folder only (own package cache, no other sources) and runs encode → decode without `JXL_NATIVE_PATH`, so .NET resolves `runtimes/<rid>/native/` itself. On Linux the harness prints the loaded file and `smoke.sh` checks it is that RID's (musl on Alpine).
 
-1. On `ubuntu-24.04`, run `build.sh win-x64 win-arm64` in Docker and upload both DLLs as one artifact.
-2. On `windows-2025` and `windows-11-arm`, download that artifact and run the harness (`test.ps1`), then upload each DLL that passed, with its `build-info.txt` and `test-result.txt`, as `windows-tested-<rid>`.
-3. On the same runners, `test.ps1` then packs a Windows-only `.nupkg` and smoke-tests it: a copy of the harness restores it from a local folder and runs encode → decode, proving `runtimes/win-*/native/` resolves. The DLL is uploaded only if both steps pass.
+## CI (GitHub Actions)
 
-Locally, `./fetch-windows.sh [run-id]` downloads the `windows-tested-*` artifacts into `artifacts/native/win-*/`, replacing any local Windows build, so the files packed are exactly the ones tested on Windows. Actions are pinned by commit SHA.
+Actions are pinned by commit SHA. All runners are GitHub-hosted and free for public repos.
 
-The repo must be on GitHub. On a private repo, Windows minutes count double against the plan's quota, and `windows-11-arm` may not be available; check before relying on it. If it isn't, `win-arm64` is not shipped.
+**`ci.yml`** runs on every push to main, every pull request, and on dispatch:
 
-## Release (local)
+1. `native` (6 jobs): build and test each Linux and macOS RID on its own runner (`build.sh`, `test.sh`).
+2. `windows-build` cross-compiles both Windows DLLs on `ubuntu-24.04`; `windows-test` tests each on `windows-2025` / `windows-11-arm` (`test.ps1`).
+3. `djxl`: every RID's encoded files must decode with Ubuntu's `djxl` to exactly the source pixels.
+4. `package`: gathers all eight tested libraries and runs `pack.sh`.
+5. `smoke` (8 jobs): smoke-tests the final `.nupkg` on every RID's runner.
+6. `release`, on main only: if no GitHub release `v<version>` exists yet, push the `.nupkg` to nuget.org (`dotnet nuget push --skip-duplicate`), then create the release with the `.nupkg` attached. It authenticates with nuget.org Trusted Publishing: the job runs in the `nuget` environment (deployable from `main` only), and `NuGet/login` exchanges its OIDC token for a short-lived API key; the nuget.org policy for `MightyLittleJxl.*` accepts only `bjornsallarp/libjxl-native`, `ci.yml`, environment `nuget`. No secret is stored. So merging a new version to main publishes it, and other merges publish nothing.
 
-- `pack.sh` takes every `artifacts/native/<rid>/`, refuses to pack if any lacks a passing `test-result.txt` or a required RID is missing, and runs `dotnet pack` into `artifacts/package/`. A rebuild clears the test result; Windows results come from `fetch-windows.sh`. It doesn't require the Windows run to be for the current commit, since unrelated commits (docs, scripts) don't change the DLL; the result records the run's commit.
-- It then smoke-tests the `.nupkg`: a fresh copy of the harness restores it from the local folder (own package cache, no other sources), builds once on the Mac (portable), and runs encode → decode on all four Linux RIDs in the runtime images and on both macOS RIDs, without `JXL_NATIVE_PATH`. On Linux the harness prints the loaded file, and `pack.sh` checks it is `runtimes/<rid>/native/`. Windows is covered by the workflow.
-- Publishing is a manual `dotnet nuget push` to the private feed, documented in the README. Tag the commit `v<version>`.
+**`update.yml`** runs weekly (Monday 06:00 UTC) and on dispatch. If libjxl's latest release differs from `LIBJXL_TAG`, it commits a bump (tag, commit, README version, drops `PACKAGE_VERSION`) to `bump/libjxl-<tag>`, opens a PR, and dispatches `ci.yml` on that branch, since pushes and PRs made with `GITHUB_TOKEN` trigger no workflows. Its checks show on the PR; merging releases. It needs the repo setting "Allow GitHub Actions to create and approve pull requests".
 
 ## Harness settings
 
@@ -118,10 +122,12 @@ The harness, and the performance criterion below, use:
 - [x] The `.nupkg` contains a native library for at least the four required RIDs, each self-contained per the dependency check. (All eight.)
 - [x] The `.nupkg` contains no managed assembly.
 - [x] On every packed RID, on that RID's test host, the harness's encode then decode of the test images is bit-exact. libjxl's `djxl` (any version) decodes the output to the same pixels; check that once by hand.
-- [x] All native libraries are built in Docker, except macOS, which is built on the Mac host. Windows tests need nothing on the Mac beyond `gh`.
+- [x] All native libraries are built in Docker, except macOS, which is built with the host toolchain.
 - [x] Lossless effort-1 encode of a 2048×2048 RGB image takes ≤ 20 ms single-threaded on an M-series Mac, close to `cjxl -d 0 -e 1 --num_threads=0`. This confirms an optimised build (release flags, highway SIMD dispatch) rather than serving any one use case. (Median 10.8 ms; `cjxl` v0.12.0 takes 13.1 ms on the same image, output within 2 bytes.)
-- [ ] A fresh `dotnet new console` with only this `.nupkg` in a local folder source restores, builds and runs encode → decode on macOS, Windows, glibc Linux and Alpine, with nothing installed on the machine. (A copy of the harness stands in for the console app. Done for macOS and Linux via `pack.sh`; Windows pending the workflow's package smoke test.)
-- [x] `README.md` covers the consumer documentation above, and the Mac prerequisites, and how to build, test (including running the Windows workflow), pack, publish to the feed and bump libjxl.
+- [x] A fresh `dotnet new console` with only this `.nupkg` in a local folder source restores, builds and runs encode → decode on macOS, Windows, glibc Linux and Alpine, with nothing installed on the machine. (A copy of the harness stands in for the console app: `smoke.sh` / `smoke.ps1`.)
+- [x] `README.md` covers the consumer documentation above, and how CI builds, tests and releases, how to run it locally, and how bumps and repacks work.
+- [ ] `ci.yml` passes on main for all eight RIDs and publishes `v0.12.0` to nuget.org and as a GitHub release.
+- [ ] `update.yml` opens a bump PR with a passing CI run when libjxl releases a new version (can be exercised by dispatching it against an older pin).
 
 ## Out of scope
 
