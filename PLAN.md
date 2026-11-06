@@ -44,7 +44,7 @@ Everything is built locally on an Apple silicon Mac: Linux and Windows in Docker
   - glibc: built on manylinux_2_28 (AlmaLinux 8, GCC 14). **glibc floor: 2.27** (highest versioned symbol required, x64 and arm64).
   - musl: build on Alpine 3.20 or newer, matching the .NET Alpine images.
   - macOS: built natively on the Mac host with the Xcode command line tools, deployment target 13.0. `osx-x64` is cross-compiled with `-arch x86_64`.
-  - Windows: x64 and arm64 cross-compiled with llvm-mingw in a Linux Docker container.
+  - Windows: x64 and arm64 cross-compiled with llvm-mingw (clang, UCRT) in a Linux Docker container, at the host's native architecture. Runtime dependencies are KERNEL32 and the UCRT's `api-ms-win-crt-*` API sets, so Windows 10 or later (as .NET 10 requires anyway).
 - **Build hosts:** Linux and Windows builds run in Docker on the Mac. arm64 images run natively; x64 images run under emulation (`--platform linux/amd64`), which is slower but keeps each build in its target's own image. The Windows workflow runs the same `build.sh` in the same pinned image on a GitHub Linux runner.
 - **Reproducible:** one `build.sh <rid>|all` that runs the right Docker image or, for macOS, the host toolchain, and writes `artifacts/native/<rid>/`. Pin the base images by digest and the libjxl tag; clone submodules for the vendored deps.
 
@@ -84,10 +84,10 @@ Where each RID runs:
 `.github/workflows/windows.yml`, triggered only by `workflow_dispatch` (`gh workflow run windows.yml --ref <commit>`):
 
 1. On `ubuntu-24.04`, run `build.sh win-x64 win-arm64` in Docker and upload both DLLs as one artifact.
-2. On `windows-2025` and `windows-11-arm`, download that artifact and run the harness (`test.ps1`): round trip plus dependency check.
-3. On the same runners, pack a Windows-only `.nupkg` and smoke-test it from a local folder source, proving `runtimes/win-*/native/` resolves.
+2. On `windows-2025` and `windows-11-arm`, download that artifact and run the harness (`test.ps1`), then upload each DLL that passed, with its `build-info.txt` and `test-result.txt`, as `windows-tested-<rid>`.
+3. *(Once packaging exists.)* On the same runners, pack a Windows-only `.nupkg` and smoke-test it from a local folder source, proving `runtimes/win-*/native/` resolves.
 
-Locally, `gh run download` fetches the tested DLLs into `artifacts/native/win-*/` along with the run's result, so the files packed are exactly the ones tested on Windows.
+Locally, `./fetch-windows.sh [run-id]` downloads the `windows-tested-*` artifacts into `artifacts/native/win-*/`, replacing any local Windows build, so the files packed are exactly the ones tested on Windows. Actions are pinned by commit SHA.
 
 The repo must be on GitHub. On a private repo, Windows minutes count double against the plan's quota, and `windows-11-arm` may not be available; check before relying on it. If it isn't, `win-arm64` is not shipped.
 

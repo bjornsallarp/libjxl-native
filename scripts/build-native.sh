@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds libjxl, libjxl_cms and libjxl_threads as static libraries and links
 # them, with highway, brotli and skcms, into one shared library per RID.
-# Runs inside the Linux build containers and on the macOS host.
+# Runs inside the Linux build containers, the llvm-mingw container (Windows)
+# and on the macOS host.
 # Usage: build-native.sh <rid> <libjxl-src> <work-dir> <out-dir>
 set -euo pipefail
 
@@ -12,6 +13,7 @@ jobs=$(getconf _NPROCESSORS_ONLN)
 case $rid in
   osx-*) os=osx ;;
   linux-*) os=linux ;;
+  win-*) os=win ;;
   *) echo "unsupported rid: $rid" >&2; exit 1 ;;
 esac
 
@@ -46,6 +48,17 @@ if command -v ninja >/dev/null; then cmake_args+=(-G Ninja); fi
 if [[ $os == osx ]]; then
   arch=${rid#osx-}; [[ $arch == x64 ]] && arch=x86_64
   cmake_args+=(-DCMAKE_OSX_ARCHITECTURES=$arch "-DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOS_DEPLOYMENT_TARGET")
+elif [[ $os == win ]]; then
+  case $rid in
+    win-x64) triple=x86_64-w64-mingw32 proc=AMD64 ;;
+    win-arm64) triple=aarch64-w64-mingw32 proc=ARM64 ;;
+    *) echo "unsupported rid: $rid" >&2; exit 1 ;;
+  esac
+  cmake_args+=(
+    -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=$proc
+    -DCMAKE_C_COMPILER=$triple-clang -DCMAKE_CXX_COMPILER=$triple-clang++
+    -DCMAKE_RC_COMPILER=$triple-windres
+  )
 fi
 
 cmake -S "$src" -B "$work" "${cmake_args[@]}"
@@ -77,6 +90,16 @@ if [[ $os == linux ]]; then
   if [[ $rid != linux-musl-* ]]; then
     glibc_floor=$(objdump -T "$so" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
   fi
+elif [[ $os == win ]]; then
+  # -static links libc++, libunwind and winpthreads in, leaving only system DLLs.
+  so="$out/jxl_native.dll"
+  $triple-clang++ -shared -o "$so" \
+    -Wl,--whole-archive "$jxl" "$cms" "$threads" -Wl,--no-whole-archive "${deps[@]}" \
+    -static -s
+  exported=$(llvm-readobj --coff-exports "$so" | sed -n 's/^ *Name: //p' | sort)
+  needed=$(llvm-readobj --coff-imports "$so" | sed -n 's/^ *Name: //p' | sort -u)
+  allowed='^(KERNEL32\.dll|api-ms-win-crt-[a-z0-9-]+\.dll)$'
+  glibc_floor=
 else
   so="$out/libjxl_native.dylib"
   c++ -dynamiclib -arch "$arch" "-mmacosx-version-min=$MACOS_DEPLOYMENT_TARGET" -o "$so" \

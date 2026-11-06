@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Builds libjxl_native into artifacts/native/<rid>/.
 # Usage: ./build.sh [all | <rid>...]
-# Linux RIDs build in Docker; macOS RIDs build on this Mac.
+# Linux and Windows RIDs build in Docker; macOS RIDs build on this Mac.
 set -euo pipefail
 cd "$(dirname "$0")"
 root=$(pwd)
 set -a; source versions.env; set +a
 
-all_rids=(linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-arm64 osx-x64)
+all_rids=(linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-arm64 osx-x64 win-x64 win-arm64)
 if [[ $# -eq 0 || $1 == all ]]; then rids=("${all_rids[@]}"); else rids=("$@"); fi
 
 src=build/src/libjxl
@@ -48,6 +48,10 @@ for rid in "${rids[@]}"; do
     linux-arm64) in_docker "$rid" "$MANYLINUX_ARM64_IMAGE" linux/arm64 ;;
     linux-musl-x64) in_docker "$rid" "$(musl_image linux/amd64)" linux/amd64 ;;
     linux-musl-arm64) in_docker "$rid" "$(musl_image linux/arm64)" linux/arm64 ;;
+    # Cross-compiled, so the container runs at the host's native architecture.
+    win-x64 | win-arm64)
+      docker run --rm --env-file versions.env -v "$root:/repo" -w /repo "$LLVM_MINGW_IMAGE" \
+        bash scripts/build-native.sh "$rid" "/repo/$src" "/repo/build/$rid" "/repo/artifacts/native/$rid" ;;
     osx-arm64 | osx-x64) scripts/build-native.sh "$rid" "$root/$src" "$root/build/$rid" "$root/artifacts/native/$rid" ;;
     *) echo "unknown or not yet supported rid: $rid" >&2; exit 1 ;;
   esac
